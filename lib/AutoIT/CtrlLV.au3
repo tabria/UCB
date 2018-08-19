@@ -1,0 +1,13 @@
+sleep (200)
+send ("{LCTRL down}")
+sleep (60)
+send ("{l down}")
+sleep (60)
+send ("{l up}")
+sleep (60)
+send ("{v down}")
+sleep (60)
+send ("{v up}")
+sleep (60)
+send ("{LCTRL up}")
+Exit

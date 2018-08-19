@@ -1,0 +1,421 @@
+;========================================================================================
+; Google Class													            			;
+;========================================================================================
+	#NoEnv
+	#Include Z:\SPODELEN\UCB\lib\userator.ahk
+	#Include Z:\SPODELEN\UCB\lib\Acc.ahk
+	#Include Z:\SPODELEN\UCB\lib\vlibrary.ahk
+	#KeyHistory 0
+	#MaxThreads 225
+	#MaxMem 256
+	ListLines, Off
+	CoordMode, Mouse, Screen
+	SetTitleMatchMode 2
+	SetKeyDelay, 50, 10
+	SetBatchLines, -1
+	StringCaseSense, Locale
+	
+	
+	Class Google extends Userator {
+
+		UrlStranici		:= Array()
+		targetPageInfo 	:= Array()
+		notInTop		:= Array()
+	
+	;google search engine check
+		googleSENCR(abbyyshot, removeword1, removeword2, offset) {
+			GoogleDomainArray:={"google.co.th" : ".th",  "google.co.uz":".uz", "google.com.my" : ".ту", "google.co.id" : ".id", "google.co.in" : ".in", "google.ae" : "80ak", "google.by":".ьу"}
+			rawse := this.FFSEextract(abbyyshot, removeword1, removeword2, offset)
+			If (rawse="google.com") {
+				engineToSearch=%rawse%/ncr
+				goto, exitSEExtract
+			}
+			for goog, name1 in GoogleDomainArray {
+				IfInString, rawse, %name1%
+				{
+					engineToSearch=%goog%
+					goto, exitSEExtract
+				}
+				sleep 1
+			}
+			engineToSearch=%rawse%
+			exitSEExtract:
+			sleep 200
+			return engineToSearch
+		}
+	;proverka dali se tarsi AV vmesto normalnoto tarsene pri google
+		googleavcheck() {
+			CheckDoc=- Поиск в Google
+			captchacheck=sorry
+				
+			captchaecxist:= Acc_Get("Value", this.mainLocation, 0, "ahk_class MozillaWindowClass")
+			IfInString, captchaecxist, %captchacheck%
+			{
+				this.messagebox("!!!!Captcha Google !!!! Captcha Google !!!!!")
+				sleep 200
+				this.FFwaitAll()	
+			}
+			searchgoogbg2 := Acc_Get("Name", this.mainLocation, 0, "ahk_class MozillaWindowClass")
+			StringGetPos, textpos, searchgoogbg2,  %CheckDoc%
+			if (textpos>-1) {
+				StringLeft, Cleantext, searchgoogbg2, textpos-1
+				if (cleantext = tocheck) or (cleantext = tocheck2) or (cleantext = tocheck3) {
+					this.messagebox("Paste-nato e V !!!!!")
+					ExitApp
+				}
+			}
+			IfInString, searchgoogbg2, %CheckDoc%
+			{
+				goto, nextstepnow2
+			} else {
+				this.GoogleLangChange()
+				sleep 200
+				goto, nextstepnow2
+			}
+			nextstepnow2:
+			return
+		}
+	;change lang to russian funkciq za premahvane na popup-a, koito iska da se napravi google home page i za promenqne na ezika na ru
+		GoogleLangChange() {
+				langcheck=languages
+				;click on settings
+				this.OffsetLMouseClick(678, 222,  0, 0, "left")
+				this.FFwaitAll(1, 450)	
+				sleep 300
+				;click on lang
+				this.OffsetLMouseClick(678, 282,  0, 0, "left")
+				this.FFwaitAll()
+				;click on radio button for rus lang
+				this.OffsetLMouseClick(531, 376,  0, 0, "left")
+				sleep 300
+				;click on save button
+				this.OffsetLMouseClick(730, 575,  0, 0, "left")
+				sleep 200
+				Loop, 20
+				{
+					DescrLoc:="application.grouping1.property_page2.dialog"
+					Descr:=Acc_Get("Description", DescrLoc, 0, "ahk_class MozillaWindowClass")
+					if (descr!="") {
+						this.Ente()
+						sleep 200
+						this.FFwaitAll()
+						break
+					}
+					sleep 100
+				}
+				return
+		}
+	;klika se na predlojenieto za tarsene na greshnata duma pri avtokorekciq
+		googleWrongSearchClick(docObj) {
+			linknow := 0
+
+			for each, obj in Acc_Children(docObj) {
+				Hpos:=Acc_LocationH(obj).pos	
+				Xpos:=Acc_LocationX(obj).pos
+				;msgbox, xpos %xpos% hpos %hpos%
+				;check for major parent
+				If ((Xpos=154) or (Xpos = 170)) and (Hpos<100) and (Hpos>40) {
+					if (Xpos = 170) {
+						for each, child in Acc_Children(obj) {
+							;msgbox, ifas 1
+							if (Acc_GetRoleText(child .accRole(0))="editable text") 
+								and ( Instr(child.accName(0), "Искать вместо этого") 
+								or InStr(child .accName(0), "Искать только" )) {
+								;msgbox, link13
+									linknow := 1
+							} else if (Acc_GetRoleText(child .accRole(0))="editable text") 
+								and (child .accName(0) = "Не найдено результатов по запросу ")   {
+									;msgbox, liko2
+									return this.messagebox("Nqma rezultati za tarseneto Promqna i OK !!!!")
+							} else if (Acc_GetRoleText(child .accRole(0))="link") and (linknow = 1) {
+									;msgbox, errorrs
+									ErrorX:=Acc_LocationX(child).pos
+									ErrorY:=Acc_LocationY(child).pos
+									this.OffsetLMouseClick(ErrorX, ErrorY,  12, 6, "left") 
+									this.FFwaitAll()
+									return
+							} else  {
+								sleep 1
+							}
+						}
+					}
+					return this.googleWrongSearchClick(obj)
+				}
+				if (Acc_GetRoleText(obj .accRole(0))="unknown object") {	
+					if (hpos>400) {
+						;msgbox, dsea
+						return this.googleWrongSearchClick(obj)
+					}
+					if (xpos = 154) and (hpos >40 ) {
+						;msgbox, dsea
+						return this.googleWrongSearchClick(obj)
+					}
+				}
+			}
+		}
+		;Google recursive tests
+		GoogleBaseMain(docobj) {
+			WinGet, hwnd, ID, ahk_class MozillaWindowClass
+			hPrev:=0
+			;msgbox, zeroing hPrev %hprev%
+			for each, obj in Acc_Children(docobj) {
+				Hpos:=Acc_LocationH(obj).pos
+				if (Hpos !=0 && Hpos>Hprev) {
+					Hprev := Hpos
+				}
+				sleep 1
+			}
+			for each, obj in Acc_Children(docobj){
+				Xpos:=Acc_LocationX(obj).pos
+				Hpos:=Acc_LocationH(obj).pos
+				;msgbox, xposasdsds >%xpos%< hpospdosad>%hpos%< msgbox, hprev %hprev%
+				if (xpos=170) and (hpos=hPrev) {
+					return this.FFNormalPath(GetAccPath(obj, hwnd)) . ".1.2.1" 
+					
+				}
+				if (Acc_GetRoleText(obj .accRole(0))="unknown object") and (Hpos=hPrev) {
+					return this.GoogleBaseMain(obj) 
+				}
+				sleep 1
+			}
+		}
+		/*
+		;NE SE IZPOLZVA----------------------------------
+		GoogleBaseMainParentOLd(obje){
+			WinGet, hwnd, ID, ahk_class MozillaWindowClass
+			hStart := Acc_LocationH(obje).pos
+			hEnd := "NN"
+			for each, child in Acc_Children(obje) {
+				hEnd := Acc_LocationH(child).pos
+				if (hStart != hEnd) and (hEnd > 35) {
+					mainpath :=this.FFNormalPath(GetAccPath(child, hwnd))
+					msgbox, 2nd mainpath %mainpath%
+					return Acc_Get("Object", mainpath, 0, "ahk_class MozillaWindowClass")
+				}
+			}
+			return this.GoogleBaseMainParent(child)
+		}
+		*/
+		;namira dali ima sub parenti sled osnovniqt parent i postavq rezultatite chrez googleInsertResult
+		googleResultFinder(path, sitesNotToFind, targetPage) {
+			if (path="") {
+				this.messagebox("Proverka v main H!!!!Will Exit")
+				ExitApp
+			}
+			ParObj	:= Acc_Get("Object", path, 0, "ahk_class MozillaWindowClass")
+			loopCount:=ParObj .accChildCount
+			if (loopCount = 0) {
+				;nqma childi za opredelqne na sub parenta
+				this.messagebox("Error in number of childs!! Will Exit")
+				ExitApp
+			}
+			Loop % loopCount {
+				SubParPath := path . "." . a_Index . ".1"
+				subParObj	:= Acc_Get("Object", SubParPath, 0, "ahk_class MozillaWindowClass")
+				for each, subParChild in Acc_Children(subParObj) {
+					childs := subparObj .accChildCount
+					;msgbox, childs %childs%
+					;msgbox, loopcount e %loopCount%
+					this.googleInsertResult(subParChild, sitesNotToFind, targetPage)
+				;msgbox, next loop for
+					sleep 1
+				}
+				sleep 1
+			}	
+			return
+		}
+		;postavq path i position na rezultata ako e link v array
+		googleInsertResult(obj, sitesNotToFind, targetPage){
+			for each, resultChild in Acc_Children(obj) {
+				hpos1 := Acc_LocationH(resultChild).pos
+				xpos1 := Acc_LocationX(resultChild).pos
+			;msgbox, hpos1 %hpos1% a index %a_index%
+				if ((xpos1 != 170) or (hpos1 < 20)) {
+					return
+				}
+				if (hpos1 = 22) {
+					return this.googleInsertResult(resultChild, sitesNotToFind, targetPage)
+				}
+				if  (hpos1 = 21) and (Acc_GetRoleText(resultChild .accRole(0))="link") {
+					urlToInsert:=this.FFWebPos(resultChild, sitesNotToFind, "google", targetPage)
+					this.posi := this.posi + 1
+					a:= this.posi
+					;msgbox, final 01 position >%a% and urltoinsert >%urlToInsert%<
+					if ((targetPage = "Yes") and (urlToInsert != "Ne e Path") and (urlToInsert != "")) {
+						this.targetPageInfo.Insert(urlToInsert)
+						this.targetPageInfo.Insert(this.posi)
+						return
+					}
+					if (urlToInsert !="") {
+						;msgbox, insert is here
+						this.UrlStranici.Insert(urlToInsert)
+						return
+					}
+					return
+				}
+				sleep 1
+			}
+			return this.googleInsertResult(resultChild, sitesNotToFind, targetPage)
+		}
+		/*
+		GoogleBaseFindResultsOLD(obj, notToOpenSitesArray, targetPage) {
+			;msgbox, position se nulira >%position%<
+			for each, objec in Acc_Children(obj) {
+				msgbox, return to base main position
+
+					countChild:=obCh .accChildCount
+				msgbox, base countchild  %countChild%
+					for each, ob in Acc_Children(obCh) {
+						hpos := Acc_LocationH(ob).pos
+						msgbox, base and hpos %hpos%
+						this.GoogleBaseLinkFinder(ob, notToOpenSitesArray, targetPage, position)
+						msgbox, exit base lin
+						if ((this.targetPageInfo[1] != "") and (this.targetPageInfo[1] != "Ne e Path")) {
+							;msgbox, inside chceck
+							break
+						}
+						sleep 1
+				}
+				sleep 1
+			}
+			msgbox, end forsaasd
+			return
+		}
+		
+		GoogleBaseFindResultsOLD(obj, notToOpenSitesArray, targetPage) {
+		;msgbox, position se nulira >%position%<
+			for each, objec in Acc_Children(obj) {
+				msgbox, return to base main position
+				for each, obCh in Acc_Children(objec) {
+					countChild:=obCh .accChildCount
+				msgbox, base countchild  %countChild%
+					for each, ob in Acc_Children(obCh) {
+						hpos := Acc_LocationH(ob).pos
+						msgbox, base and hpos %hpos%
+						this.GoogleBaseLinkFinder(ob, notToOpenSitesArray, targetPage, position)
+						msgbox, exit base lin
+						if ((this.targetPageInfo[1] != "") and (this.targetPageInfo[1] != "Ne e Path")) {
+							;msgbox, inside chceck
+							break
+						}
+						sleep 1
+					}
+					sleep 1
+				}
+				sleep 1
+			}
+			msgbox, end forsaasd
+			return
+		}
+		
+		GoogleBaseLinkFinderOLD(obj, notToOpenSitesArray, targetPage, position){
+			for each, child in Acc_Children(obj) {
+			;msgbox, 02 position >%position%<
+				countChilds:=child .accChildCount
+				hpos := Acc_LocationH(child).pos
+				msgbox, countchilds %countChilds% and hpos %hpos%
+				if (countChilds = 1) {
+					return this.GoogleBaseLinkFinder(child, notToOpenSitesArray, targetPage, position)
+				}
+				if (countChilds > 1) {
+					for each, result1 in Acc_Children(child){
+						;msgbox, 03 position >%position%<
+						xpos := Acc_LocationX(result1).pos
+						hpos := Acc_LocationH(result1).pos
+						msgbox, this check here xpos %xpos% hpos %hpos%
+						if ((xpos != 170) or (hpos < 20)) {
+							break
+						}
+						;kogato nqma ekstra parent-i
+						if (hpos = 22) {
+							for each, result5 in Acc_Children(result1){
+							;msgbox, 04 A position >%position%<
+								hpos5 := Acc_LocationH(result5).pos
+								msgbox, hpos 5 e %hpos5%
+								if  (hpos5 = 21) and (Acc_GetRoleText(result5 .accRole(0))="link") {
+								msgbox, link
+									urlToInsert:=this.FFWebPos(result5, notToOpenSitesArray, "google", targetPage)
+									this.posi := this.posi + 1
+									a:= this.posi
+									msgbox, final 01 position >%a%
+									if ((targetPage = "Yes") and (urlToInsert != "Ne e Path") and (urlToInsert != "")) {
+										this.targetPageInfo.Insert(urlToInsert)
+										this.targetPageInfo.Insert(this.posi)
+										return
+									}
+									if (urlToInsert !="") {
+										this.UrlStranici.Insert(urlToInsert)
+									}
+								}
+								sleep 1
+							}
+						}
+						for each, result2 in Acc_Children(result1) {
+							;msgbox, 04 B position >%position%<
+							for each, result3 in Acc_Children(result2) {
+								;msgbox, 05 position >%position%<
+								hpos := Acc_LocationH(result3).pos
+								if (hpos = 22) {
+									for each, result4 in Acc_Children(result3){
+										;msgbox, 06 position >%position%<
+										hpos4 := Acc_LocationH(result4).pos
+										msgbox, hpos4 e %hpos4%
+										if  (hpos4 = 21) and (Acc_GetRoleText(result4 .accRole(0))="link") {
+											msgbox, ima link
+											urlToInsert := this.FFWebPos(result4, notToOpenSitesArray, "google", targetPage)
+											this.posi := this.posi + 1
+																				a:= this.posi
+									msgbox, final 02 position >%a%
+											if ((targetPage = "Yes") and (urlToInsert != "Ne e Path") and (urlToInsert != "")) {
+												this.targetPageInfo.Insert(urlToInsert)
+												this.targetPageInfo.Insert(this.posi)
+												return
+												}
+											if (urlToInsert !="") {
+												this.UrlStranici.Insert(urlToInsert)
+											}
+										}
+										sleep 1
+									}
+								}
+								sleep 1
+							}
+							sleep 1
+						}
+						sleep 1
+					}
+				}
+				sleep 1
+			}	
+		}
+		*/
+		;obedinqva base methods
+		googBaseAll(pageToFind, targetPage) {
+			mainObj 	:= this.FFMainObject()
+			mainPath	:= this.GoogleBaseMain(mainObj)
+			;msgbox, main > %mainPath%<
+			this.googleResultFinder(mainPath, pageToFind, targetPage)
+			return
+		}
+	;namira searchbar-a v google
+		GoogleSearchBarLoc() {
+			mainLocation	:= "application.grouping1.property_page2.unknown_object1.document1"
+			docobj 	:= Acc_Get("Object", mainLocation, 0, "ahk_class MozillaWindowClass")
+			;loop za opredelqne na conteinerite sadarjashti rezultatite
+			for each, obj in Acc_Children(docobj) {
+				Hpos:=Acc_LocationH(obj).pos
+				Xpos:=Acc_LocationX(obj).pos
+				;msgbox, start xpos %xpos% hpos %hpos%
+				if (Xpos = 4) and (Hpos > 40) {
+					Ypos:=Acc_LocationY(obj).pos
+					;msgbox, xpos %xpos% ypos %ypos%
+					this.OffsetLMouseClick(Xpos, Ypos, 433, 22, "left")
+					sleep 200
+					return
+				}
+				sleep 1
+			}
+			this.messagebox("SbLoc ne e nameren!!!! Will Exit")
+			return
+		}	
+	}

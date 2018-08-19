@@ -1,0 +1,476 @@
+;========================================================================================
+; Yandex Class													            			;
+;========================================================================================
+	#NoEnv
+	#Include Z:\SPODELEN\UCB\lib\Userator.ahk
+	#Include Z:\SPODELEN\UCB\lib\Acc.ahk
+	#Include Z:\SPODELEN\UCB\lib\vlibrary.ahk
+	#KeyHistory 0
+	#MaxThreads 225
+	#MaxMem 256
+	ListLines, Off
+	CoordMode, Mouse, Screen
+	SetTitleMatchMode 2
+	SetKeyDelay, 50, 10
+	SetBatchLines, -1
+	StringCaseSense, Locale
+	
+	
+	Class Yandex extends Userator {
+	
+		regionByHand	:= ["Ташкент","Новая Москва"]
+		UrlStranici			:= array()
+		targetPageInfo 		:= array()
+		notInTop			:= array()
+	
+	;Check for yandex.com
+		yandexComCheck(abbyyshot) {
+			If InStr(abbyyshot, "yandex.com") {
+				this.messagebox("RACHNO Ima yandex.com")
+				sleep 300
+				ExitApp
+			}
+			return
+		}
+		;vtori klik na naiti, za da se premahnat boklucite sled url-a
+		yandexSecondClickSearch(){
+			this.yandexRemoveBrowserDownloadLink()
+			sleep 200
+			MouseClick, left, 701, 152, 1, 3
+			sleep 200
+			this.FFwaitAll()
+			return
+		}
+		;vrashta path na konteinera, (ako reg="NO" - konteinera list sas stranicite), ako ne e "No" vrashta parent konteinera na list
+		yandexMainContainer(docobj, reg="region"){
+			for each, subobj in Acc_Children(docobj) {
+				Xpos:= Acc_LocationX(subobj).pos
+				Hpos:= Acc_LocationH(subobj).pos
+				if (Acc_GetRoleText(subobj .accRole(0))="list"){
+					WinGet, hwnd, ID, ahk_class MozillaWindowClass
+					if (reg="region") {
+						return, pathchange:=this.FFNormalPath(GetAccPath(docobj, hwnd))
+					} else {
+						return, pathchange:=this.FFNormalPath(GetAccPath(subobj, hwnd))
+					}
+				}
+				if (Acc_GetRoleText(subobj .accRole(0))="unknown object") and (Hpos>400) {
+					return this.yandexMainContainer(subobj, reg)
+				}
+				sleep 1
+			}
+		}
+		;vrashta path na konteinera sadarjasht regiona na 2-rata stranica na yandex
+		yandexRegMainContainer() {
+			pathchange 			:= ""
+			regHolderCheck 		= Изменить регион
+			
+			mainObj 			:= this.FFMainObject()
+			mainContainerPath	:= this.yandexMainContainer(mainObj, "region")
+			currObj				:= Acc_Get("Object", mainContainerPath, 0, "ahk_class MozillaWindowClass")
+			for each, part in Acc_Children(currObj) {
+				name := part .accName(0)
+				IfInString, name, %regHolderCheck%
+				{
+					WinGet, hwnd, ID, ahk_class MozillaWindowClass
+					return, pathchange:=this.FFNormalPath(GetAccPath(part, hwnd))
+				}
+				sleep 1
+			}
+				this.messagebox("Region Container ne e nameren will EXIT !!!")
+				ExitApp
+		}
+		;make all regions to digits
+		yandexAllRegionsDigits(finalReg){
+			checkfile=Z:\SPODELEN\UCB\TXT\regionsNumbers.txt
+			regNumber := 0
+			;proverka dali e pravilno
+			
+			if finalReg is Digit 
+			{
+				return finalReg
+			}
+			
+			Loop, Read, %checkfile%
+			{
+				Loop, Parse, A_LoopreadLine, \
+				{
+					StringCaseSense Locale
+					if (A_Index = 1){
+						regNumber := A_LoopField
+					}					
+					if ((A_LoopField=finalReg) and (A_Index = 2))
+					{
+						goto, endRegNumbers
+					}
+					;sleep 1
+				}
+				;sleep 1	
+			}
+			endRegNumbers:
+			return, regNumber
+		}
+		
+		
+		;ekstraktva regiona ot screenshota
+		yandexRegionFromScreen() {
+			checkfile=Z:\SPODELEN\UCB\TXT\regions.txt
+			abbyyfile:="W:\zad.txt"
+			openBrack:="регион ("
+			inYanCheck = в Яндексе
+			
+			this.browserMinMaxAction("Firefox", "min")
+			abbyfast() 
+			FileRead, abbyyshot, %abbyyfile%
+			sleep 100
+			this.browserMinMaxAction("Firefox", "max")
+			this.browserWinAction("Firefox", "activate")
+			StringReplace, abbyyshot, abbyyshot, `r`n, %a_space%, All
+		;msgbox, abbyy >%abbyyshot%<
+			StringGetPos, inYanCheckPos, abbyyshot, %inYanCheck%
+			StringLeft, yanCheckRemove, abbyyshot, % (inYanCheckPos-2)
+		;msgbox, after yan rem %yanCheckRemove%
+			StringGetPos, openBrackPos, yanCheckRemove, %openBrack%
+		;msgbox, braqack et >%openBrackPos%<
+			StringTrimLeft, finalReg, yanCheckRemove, % (openBrackPos+strlen(openBrack))
+		;msgbox, final %finalReg%
+			;proverka dali e pravilno
+		/*
+		;############ Temp Fix for Yandex Regions - Make All Regions to Digits #################
+		
+			finalVar:=this.yandexAllRegionsDigits(finalReg)
+			if (finalVar = 0) {
+				this.browserWinAction("Firefox", "activate")
+				finalReg=%finalReg%
+				;msgbox, before crt final %finalReg%
+				this.CrT()
+				this.sendingKeys(finalVar)
+				this.messagebox("korigira se regiona i OK")
+				sleep 200
+				addressValue:=this.FFGetCurrUrl()
+				keyword=%finalReg%\%addressValue%
+				FileAppend, `r`n%keyword%, Z:\SPODELEN\UCB\TXT\regions.txt
+				sleep 100
+				this.browserTabAction("Firefox", "close", 3)
+			}
+		
+		;########################3 End Temp Fix ################################################
+			*/
+			Loop, Read, %checkfile%
+			{
+				Loop, Parse, A_LoopreadLine, \
+				{
+					StringCaseSense Locale
+					if ((A_LoopField=finalReg) and (A_Index = 1))
+					{
+						subReg:=A_LoopreadLine
+						StringGetPos, subRegPos, subReg, \
+						StringTrimLeft, addressValue, subReg, % (subRegPos+1)
+						goto, pastezapros29
+					}
+					;sleep 2
+				}
+				;sleep 2	
+			}
+			this.browserWinAction("Firefox", "activate")
+			finalReg=%finalReg%
+			;msgbox, before crt final %finalReg%
+			this.CrT()
+			this.sendingKeys(finalReg)
+			this.messagebox("korigira se regiona i OK")
+			sleep 200
+			addressValue:=this.FFGetCurrUrl()
+			keyword=%finalReg%\%addressValue%
+			FileAppend, `r`n%keyword%, Z:\SPODELEN\UCB\TXT\regions.txt
+			sleep 100
+			this.browserTabAction("Firefox", "close", 3)
+			pastezapros29:
+			finalVar=%addressValue%
+			this.browserTabAction("Firefox", "change", 2)
+			sleep 100
+			return, finalVar
+		}
+		;vzima se tekushtiqt region
+		yandexCurrentRegion(){
+			toAdd 				:= ".1"
+			mainContainerPath	:= this.yandexRegMainContainer()
+			;dobavq se .1 za da se otvori link konteinera s imeto na regiona
+			trueRegionPath		:= mainContainerPath toAdd
+			regionName 			:= Acc_Get("Name", trueRegionPath, 0, "ahk_class MozillaWindowClass")
+			return, regionName
+		}
+		
+		yandexRegionForRegion(searchEngine) {
+			
+			checkInfo			:= "Дополнительная информация о запросе"
+			yandexRu := "yandex.ru"
+			
+			currentUrl := this.FFGetCurrUrl()
+			IfNotInString, currentUrl, %searchEngine%
+			{
+				this.messagebox("Promeni regiona da savpada s domeina")
+				return
+			}
+			
+			mainObj				:= this.FFMainObject()
+			mainContainerPath	:= this.yandexMainContainer(mainObj, "region")
+			CurObj 				:= Acc_Get("Object", mainContainerPath, 0, "ahk_class MozillaWindowClass")
+
+			for each, result in Acc_Children(CurObj) {
+				;msgbox, resuilt %result%
+				nameNow := result .accName(0)
+				if inStr(nameNow, checkInfo) {
+					WinGet, hwnd, ID, ahk_class MozillaWindowClass
+					pathPage:=this.FFNormalPath(GetAccPath(result, hwnd))
+					this.objectsRegion.Insert(pathPage)
+					this.childPath.Insert(1)
+					valT := this.FFRegChildChecker()
+					if (valT="noscroll") {
+						this.messagebox("Promeni regiona da savpada s domeina")
+						return
+					}
+				}
+				sleep 1
+			}
+			return
+		}
+		;temp fix for not changing reg to moscow (reg moscow not in the list)
+		yandexCheckRegionForErrors() {
+			regionNow	:= this.yandexCurrentRegion()
+			
+			For vo, bo in this.regionByHand {	
+				If InStr(regionNow, bo) {
+					this.messagebox("Region Page Moskva Problem!! Will Exit")
+					ExitApp
+				}
+				sleep 1
+			}
+		}
+		;temp fix for not changing reg to moscow (reg moscow not in the list)
+		
+		;proverka i ako trqbva smqna na regiona
+		yandexRegionChanger() {
+			regClip		:= this.yandexRegionFromScreen()
+			regionNow	:= this.yandexCurrentRegion()
+			;temp fix for not changing reg to moscow (reg moscow not in the list)
+			
+			if regClip is digit
+			{
+				;digit
+				irvalue := this.FFGetCurrUrl()
+				irQCheck := "?lr="
+				ampCheck := "&"
+				irEqualCheck := "lr="
+				StringCaseSense, Locale
+				IfInString, irvalue, %irQCheck%
+				{
+					StringGetPos, ampPos, irvalue, %ampCheck%
+				} else {
+					StringGetPos, ampPos, irvalue, %ampCheck%, L2
+				}
+				StringGetPos, irEqualPos, irvalue, %irEqualCheck%
+				if (ampPos < 1) {
+					LeftKeys := 0
+				} else {
+					leftKeys := StrLen(irvalue) - ampPos
+				}
+				delKeys := StrLen(irvalue) - irEqualPos - strLen(irEqualCheck) - LeftKeys
+				this.CrL()
+				this.En()
+				if (leftKeys > 0) {
+					Loop, %leftKeys% {
+						this.lef()
+					}
+				}
+				sleep 100
+				Loop, %delKeys% {
+					this.backspac()
+				}
+				this.sendingKeysPageLoad(regclip, "NA", 1)
+				this.yandexRemoveBrowserDownloadLink()
+				
+			} 
+			else IfInString, regclip, %regionNow%
+			{
+				goto, endRegChanger
+			} else {
+				;smqna na regiona
+				mainObj		:= this.FFMainObject()
+				mainPath 	:= this.yandexRegMainContainer(mainObj)
+				this.FFOnScreenLocation(mainPath, "yandex")
+				this.FFwaitAll()
+				this.yandexRegClick()
+				this.sendingKeysPageLoad(regClip, "A", 0)
+				this.Ente()
+				sleep 200
+				this.Ente()
+				this.FFwaitAll()
+				urlNow := this.FFGetCurrUrl()
+				if inStr(urlNow, "tune") {
+					this.messagebox("Region Page Problem!! Will Exit")
+					ExitApp
+				}
+				this.yandexRemoveBrowserDownloadLink()
+			}
+			endRegChanger:
+			sleep 200
+			return
+		}
+		;postavq se regiona v poleto na tune yandex
+		yandexRegClick() {
+			regionpath:="application.grouping1.property_page2.unknown_object1.document1.unknown_object2.unknown_object1.unknown_object2"
+			Loop
+			{
+				xRegionLoc:= Acc_GetX("location", regionpath, 0, "ahk_class MozillaWindowClass")
+				yRegionLoc:= Acc_GetY("location", regionpath, 0, "ahk_class MozillaWindowClass")
+				if (xRegionLoc="")
+				{
+					;oshte ne se e zaredila stranicata
+					goto, againregpole
+				}
+				;vzima se x i y na poleto
+				this.OffsetLMouseClick(xRegionLoc, yRegionLoc, 363, 55, "left") 
+				sleep 100
+				goto, exitamdpastereg
+				againregpole:
+				sleep 2
+			}
+			exitamdpastereg:
+			return
+		}
+		;scroll-va regiona ako ne e specialen
+		yandexScrollRegion() {
+			checkInfo			:= "Дополнительная информация о запросе"
+			mainObj				:= this.FFMainObject()
+			mainContainerPath	:= this.yandexMainContainer(mainObj, "region")
+			CurObj 				:= Acc_Get("Object", mainContainerPath, 0, "ahk_class MozillaWindowClass")
+
+			for each, result in Acc_Children(CurObj) {
+				;msgbox, resuilt %result%
+				nameNow := result .accName(0)
+				if inStr(nameNow, checkInfo) {
+					WinGet, hwnd, ID, ahk_class MozillaWindowClass
+					pathPage:=this.FFNormalPath(GetAccPath(result, hwnd))
+					this.objectsRegion.Insert(pathPage)
+					this.childPath.Insert(1)
+					valT := this.FFRegChildChecker()
+					if (valT="noscroll") {
+						goto, noscrollReg
+					}
+				}
+				sleep 1
+			}
+			MouseClick, left, 20, 230, 1, 3
+			sleep 50
+			this.En()
+			noscrollReg:
+	/*		
+			;##########3 FIX for not working tune.yandex ###############333
+			FileDelete, C:\Neshta\Autohotkey Scripts\Auto_firefox\Vzadache_text\regDigits.txt
+			FileAppend,
+			(
+				nevozmojno izmenit region cherez tune.yandex
+			), C:\Neshta\Autohotkey Scripts\Auto_firefox\Vzadache_text\regDigits.txt
+			sleep 100
+			;####################3333 End FIX #######################3
+		*/	
+			
+			sleep 100
+			return
+		}
+		;yandex search bar clicker ima shortcut alt+shift+s
+		yandexSBLocator() {
+			mainObj	:= this.FFMainObject()
+			for each, val in Acc_Children(mainObj) {
+				Hpos := Acc_LocationH(val).pos
+				if ((Hpos > 50) and (Hpos < 75)) {
+					Xpos := Acc_LocationX(val).pos
+					Ypos := Acc_LocationY(val).pos
+					this.OffsetLMouseClick(Xpos, Ypos, 394, 36, "left")
+					sleep 3000
+					return
+				}
+				sleep 1
+			}
+			return
+		}
+		;yandex rezultati
+		yandexResults(notToOpenSitesOrPageToFind, targetPage) {
+			mainObj 		:= this.FFMainObject()
+			position		:= 0
+			yandexListPath	:= this.yandexMainContainer(mainObj, "list")
+			listObj 		:= Acc_Get("Object", yandexListPath, 0, "ahk_class MozillaWindowClass")
+			for each, firstchild in Acc_Children(listObj) {
+				if (firstChild .accName(0) = "Реклама") {
+					continue
+				}
+				for each, secondChild in Acc_Children(firstChild) {
+					for each, thirdChild in Acc_Children(secondChild) {
+						if (Acc_GetRoleText(thirdChild .accRole(0))="link") {
+							urlToInsert:=this.FFWebPos(thirdChild, notToOpenSitesOrPageToFind, "yandex", targetPage)
+							;msgbox, url >%urlToInsert%
+							if (urlToInsert!="") {
+								position := position + 1
+								;msgbox, position1 %position%
+							}
+							if ((targetPage = "Yes") and (urlToInsert != "Ne e Path") and (urlToInsert != "")) {
+								this.targetPageInfo.Insert(urlToInsert)
+								this.targetPageInfo.Insert(position)
+								return
+							}
+							if (urlToInsert !="") {
+								this.UrlStranici.Insert(urlToInsert)
+							}
+							goto, exitSecondChild
+						}
+						if (Acc_GetRoleText(thirdChild .accRole(0))="unknown object") {
+							for each, fourthChild in Acc_Children(thirdChild) {
+								if (Acc_GetRoleText(fourthChild .accRole(0))="link") {
+									urlToInsert:=this.FFWebPos(fourthChild, notToOpenSitesOrPageToFind, "yandex", targetPage)
+									if (urlToInsert!="") {
+										position := position + 1
+										;msgbox, position2 %position%
+									}
+									;msgbox, url 2 %urlToInsert%
+									if ((targetPage = "Yes") and (urlToInsert != "Ne e Path") and (urlToInsert != "")) {
+										this.targetPageInfo.Insert(urlToInsert)
+										this.targetPageInfo.Insert(position)
+										return
+									}
+									if (urlToInsert !="") {
+										this.UrlStranici.Insert(urlToInsert)
+									}
+									goto, exitSecondChild
+								}
+								sleep 1
+							}
+						}
+						sleep 1
+					}
+					sleep 1
+				}
+				exitSecondChild:
+				sleep 1
+			}
+			return
+		}
+		;tarsi i premahva link za svalqne na yandex browser
+		yandexRemoveBrowserDownloadLink() {
+		mainObj 		:= this.FFMainObject()
+			yandexListPath	:= this.yandexMainContainer(mainObj, "list")
+			StringTrimRight, noList, yandexListPath, 2
+			UnObj 		:= Acc_Get("Object", noList, 0, "ahk_class MozillaWindowClass")
+			for each, chi in Acc_Children(UnObj) {
+				xpos:=Acc_LocationX(chi).pos
+				if (xpos = 4) {
+					this.OffsetLMouseClick(975, 142, 0, 0, "left")
+					sleep 3000
+					break
+				}
+				sleep 1
+			}
+			return
+		}
+			
+		
+	}
